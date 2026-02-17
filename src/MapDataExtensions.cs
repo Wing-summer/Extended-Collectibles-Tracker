@@ -11,6 +11,7 @@ namespace ExtendedCollectiblesTracker {
 		public class Extension {
 			public int region;
 			public Dictionary<DataPearl.AbstractDataPearl.DataPearlType, int> locatedPearls = new();
+			public World world; 
 			public class CollectibleData {
 				public int order;
 				public int room;
@@ -38,11 +39,12 @@ namespace ExtendedCollectiblesTracker {
 			RainWorldGame game = rainWorld.processManager.currentMainLoop as RainWorldGame;
 			Extension extendedSelf = self.GetExtension();
 			extendedSelf.region = initWorld.region.regionNumber;
+			extendedSelf.world = initWorld;
 			
 			PlayerProgression.MiscProgressionData miscProgressionData = rainWorld.progression.miscProgressionData;
 
 			SaveState saveState = null;
-			if (saveState == null && rainWorld.progression.IsThereASavedGame(rainWorld.progression.PlayingAsSlugcat)) {
+			if (rainWorld.progression.IsThereASavedGame(rainWorld.progression.PlayingAsSlugcat)) {
 				if (rainWorld.progression.starvedSaveState != null) {
 					saveState = rainWorld.progression.starvedSaveState;
 				} else if (rainWorld.progression.currentSaveState != null) {
@@ -55,7 +57,7 @@ namespace ExtendedCollectiblesTracker {
 				AbstractRoom abstractRoom = initWorld.GetAbstractRoom(roomIndex);
 
 				RoomSettings roomSettings = new RoomSettings(abstractRoom.name, initWorld.region, false, false, game?.TimelinePoint, game);
-
+				
 				// per object
 				for (int i = 0; i < roomSettings.placedObjects.Count; i++) {
 					PlacedObject placedObject = roomSettings.placedObjects[i];
@@ -106,7 +108,7 @@ namespace ExtendedCollectiblesTracker {
 						if (!tokenData.availableToPlayers.Contains(rainWorld.progression.PlayingAsSlugcat))
 							continue;
 						
-						extendedSelf.collectibleData.Add(new Extension.CollectibleData() {
+						extendedSelf.collectibleData.Add(new Extension.CollectibleData {
 							order = -2,
 							room = roomIndex,
 							pos = placedObject.pos,
@@ -120,7 +122,7 @@ namespace ExtendedCollectiblesTracker {
 								continue;
 
 							if (ChatlogData.HasUnique(tokenData.ChatlogCollect)) {
-								extendedSelf.collectibleData.Add(new Extension.CollectibleData() {
+								extendedSelf.collectibleData.Add(new Extension.CollectibleData {
 									
 									order = 2,
 									room = roomIndex,
@@ -136,7 +138,7 @@ namespace ExtendedCollectiblesTracker {
 										saveState.deathPersistentSaveData.chatlogsRead.Contains(tokenData.ChatlogCollect);
 								}
 
-								extendedSelf.collectibleData.Add(new Extension.CollectibleData() {
+								extendedSelf.collectibleData.Add(new Extension.CollectibleData {
 									order = 2,
 									room = roomIndex,
 									pos = placedObject.pos,
@@ -150,45 +152,66 @@ namespace ExtendedCollectiblesTracker {
 			}
 		}
 
-		public static void LocatePearls(this Map.MapData self, RainWorld rainWorld) {
+		public static void LocatePearls(this Map.MapData self, RainWorld rainWorld)
+		{
 			Extension extendedSelf = self.GetExtension();
 
 			if (!rainWorld.progression.IsThereASavedGame(rainWorld.progression.PlayingAsSlugcat) ||
-				rainWorld.progression.currentSaveState == null
-			) {
+			    rainWorld.progression.currentSaveState == null)
+			{
 				return;
 			}
+
+			if (extendedSelf.region < 0 ||
+			    extendedSelf.region >= rainWorld.progression.currentSaveState.regionStates.Length)
+				return;
 
 			RegionState currentRegion = rainWorld.progression.currentSaveState.regionStates[extendedSelf.region];
-			if (currentRegion == null || currentRegion.savedObjects == null) {
+			if (currentRegion == null || currentRegion.savedObjects == null)
+			{
 				return;
 			}
 
-			foreach (string savedObject in currentRegion.savedObjects) {
-				AbstractPhysicalObject abstractPhysicalObject = SaveState.AbstractPhysicalObjectFromString(null, savedObject);
-				
-				if (abstractPhysicalObject is DataPearl.AbstractDataPearl abstractDataPearl) {
+			World worldForDeserialization = extendedSelf.world;
+			foreach (string savedObject in currentRegion.savedObjects)
+			{
+				AbstractPhysicalObject abstractPhysicalObject =
+					SaveState.AbstractPhysicalObjectFromString(worldForDeserialization, savedObject);
+
+				if (abstractPhysicalObject is DataPearl.AbstractDataPearl abstractDataPearl)
+				{
 					var pearlType = abstractDataPearl.dataPearlType;
-					if (!DataPearl.PearlIsNotMisc(pearlType))
-						continue;
+					if (!DataPearl.PearlIsNotMisc(pearlType)) continue;
 
 					WorldCoordinate pos = abstractPhysicalObject.pos;
+					Vector2 pixelPos = new Vector2(pos.x * 20f, pos.y * 20f);
 
-					if (extendedSelf.locatedPearls.TryGetValue(pearlType, out int index)) {
-						Extension.CollectibleData collectibleData = extendedSelf.collectibleData[index];
-						collectibleData.room = pos.room;
-						collectibleData.pos = new Vector2(pos.x * 20, pos.y * 20);
-						collectibleData.isRelocated = true;
-					} else {
+					if (extendedSelf.locatedPearls.TryGetValue(pearlType, out int index))
+					{
+						if (index >= 0 && index < extendedSelf.collectibleData.Count)
+						{
+							Extension.CollectibleData collectibleData = extendedSelf.collectibleData[index];
+							collectibleData.room = pos.room;
+							collectibleData.pos = pixelPos;
+							collectibleData.isRelocated = true;
+						}
+						else
+						{
+							extendedSelf.locatedPearls.Remove(pearlType);
+						}
+					}
+
+					if (!extendedSelf.locatedPearls.ContainsKey(pearlType))
+					{
 						extendedSelf.locatedPearls[pearlType] = extendedSelf.collectibleData.Count;
-
 						bool pearlRead = Mod.IsPearlRead(rainWorld, pearlType);
-
-						extendedSelf.collectibleData.Add(new Extension.CollectibleData() {
+						extendedSelf.collectibleData.Add(new Extension.CollectibleData()
+						{
 							room = pos.room,
-							pos = new Vector2(pos.x * 20, pos.y * 20),
+							pos = pixelPos,
 							color = Mod.GetPearlIconColor(pearlType),
-							innerColor = DataPearl.UniquePearlHighLightColor(pearlType).GetValueOrDefault(Color.white),
+							innerColor =
+								DataPearl.UniquePearlHighLightColor(pearlType).GetValueOrDefault(Color.white),
 							collected = pearlRead,
 							isPearl = true,
 							isRelocated = true,
@@ -197,40 +220,60 @@ namespace ExtendedCollectiblesTracker {
 				}
 			}
 
-			foreach (PersistentObjectTracker trackedObject in rainWorld.progression.currentSaveState.objectTrackers) {
-				if (trackedObject.lastSeenRegion != self.regionName)
-					continue;
+			if (rainWorld.progression.currentSaveState.objectTrackers != null)
+			{
+				foreach (PersistentObjectTracker trackedObject in rainWorld.progression.currentSaveState.objectTrackers)
+				{
+					if (trackedObject.lastSeenRegion != self.regionName) continue;
 
-				if (trackedObject.obj == null)
-					trackedObject.obj = SaveState.AbstractPhysicalObjectFromString(null, trackedObject.objRepresentation);
-				
-				if (trackedObject.obj is DataPearl.AbstractDataPearl abstractDataPearl) {
-					var pearlType = abstractDataPearl.dataPearlType;
-					if (!DataPearl.PearlIsNotMisc(pearlType))
-						continue;
+					if (trackedObject.obj == null && !string.IsNullOrEmpty(trackedObject.objRepresentation))
+					{
+						trackedObject.obj = SaveState.AbstractPhysicalObjectFromString(worldForDeserialization,
+							trackedObject.objRepresentation);
+					}
 
-					WorldCoordinate pos = trackedObject.desiredSpawnLocation;
+					if (trackedObject.obj is DataPearl.AbstractDataPearl abstractDataPearl2)
+					{
+						var pearlType = abstractDataPearl2.dataPearlType;
+						if (!DataPearl.PearlIsNotMisc(pearlType)) continue;
 
-					if (extendedSelf.locatedPearls.TryGetValue(pearlType, out int index)) {
-						Extension.CollectibleData collectibleData = extendedSelf.collectibleData[index];
-						collectibleData.room = pos.room;
-						collectibleData.pos = new Vector2(pos.x * 20, pos.y * 20);
-						collectibleData.isRelocated = true;
-					} else {
-						bool pearlRead = Mod.IsPearlRead(rainWorld, pearlType);
+						WorldCoordinate pos = trackedObject.desiredSpawnLocation;
+						Vector2 pixelPos = new Vector2(pos.x * 20f, pos.y * 20f);
 
-						extendedSelf.collectibleData.Add(new Extension.CollectibleData() {
-							room = pos.room,
-							pos = new Vector2(pos.x * 20, pos.y * 20),
-							color = Mod.GetPearlIconColor(pearlType),
-							innerColor = DataPearl.UniquePearlHighLightColor(pearlType).GetValueOrDefault(Color.white),
-							collected = pearlRead,
-							isPearl = true,
-							isRelocated = true,
-						});
+						if (extendedSelf.locatedPearls.TryGetValue(pearlType, out int index))
+						{
+							if (index >= 0 && index < extendedSelf.collectibleData.Count)
+							{
+								Extension.CollectibleData collectibleData = extendedSelf.collectibleData[index];
+								collectibleData.room = pos.room;
+								collectibleData.pos = pixelPos;
+								collectibleData.isRelocated = true;
+							}
+							else
+							{
+								extendedSelf.locatedPearls.Remove(pearlType);
+							}
+						}
+						else
+						{
+							bool pearlRead = Mod.IsPearlRead(rainWorld, pearlType);
+							extendedSelf.locatedPearls[pearlType] = extendedSelf.collectibleData.Count;
+							extendedSelf.collectibleData.Add(new Extension.CollectibleData()
+							{
+								room = pos.room,
+								pos = pixelPos,
+								color = Mod.GetPearlIconColor(pearlType),
+								innerColor =
+									DataPearl.UniquePearlHighLightColor(pearlType).GetValueOrDefault(Color.white),
+								collected = pearlRead,
+								isPearl = true,
+								isRelocated = true,
+							});
+						}
 					}
 				}
 			}
 		}
+
 	}
 }

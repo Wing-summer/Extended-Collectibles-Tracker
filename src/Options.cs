@@ -18,7 +18,7 @@ namespace ExtendedCollectiblesTracker {
 
 			Debug.Log("Initializing Config...");
 
-			Tabs = new OpTab[]{ new OpTab(this, "Options") };
+			Tabs = new OpTab[]{ new OpTab(this,  "Options") };
 
 			Vector2 position = new Vector2(50, 600);
 

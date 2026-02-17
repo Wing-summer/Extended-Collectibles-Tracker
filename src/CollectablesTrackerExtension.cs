@@ -138,17 +138,50 @@ namespace ExtendedCollectiblesTracker {
 
 		public static void GrafUpdate(CollectiblesTracker self, float timeStacker) {
 			Extension extendedSelf = self.GetExtension();
+			
+			extendedSelf.counter++;
 
-			try {
-				foreach (KeyValuePair<string, List<int>> inprogress in extendedSelf.inProgress) {
-					string regionName = inprogress.Key;
-					foreach (int spriteIndex in inprogress.Value) {
-						Color color = self.spriteColors[regionName][spriteIndex];
-						self.sprites[regionName][spriteIndex].color = Color.Lerp(color, Color.white, (Mathf.Sin((extendedSelf.counter + timeStacker) / 20) + 1) / 2);
+			List<string> regionsToRemove = new List<string>();
+
+			foreach (var kv in extendedSelf.inProgress.ToList()) {
+				string regionName = kv.Key;
+				List<int> indices = kv.Value;
+
+				if (!self.sprites.ContainsKey(regionName) || !self.spriteColors.ContainsKey(regionName)) {
+					regionsToRemove.Add(regionName);
+					continue;
+				}
+
+				var spriteList = self.sprites[regionName];
+				var colorList = self.spriteColors[regionName];
+
+				for (int i = indices.Count - 1; i >= 0; --i) {
+					int spriteIndex = indices[i];
+
+					if (spriteIndex < 0 || spriteIndex >= spriteList.Count || spriteIndex >= colorList.Count) {
+						indices.RemoveAt(i);
+						continue;
+					}
+
+					try {
+						Color color = colorList[spriteIndex];
+						FSprite sprite = spriteList[spriteIndex];
+						float t = (Mathf.Sin((extendedSelf.counter + timeStacker) / 20f) + 1f) / 2f;
+						sprite.color = Color.Lerp(color, Color.white, t);
+					} catch {
+						indices.RemoveAt(i);
 					}
 				}
-			} catch { 
+
+				if (indices.Count == 0) {
+					regionsToRemove.Add(regionName);
+				}
+			}
+
+			foreach (var r in regionsToRemove) {
+				extendedSelf.inProgress.Remove(r);
 			}
 		}
+
 	}
 }
