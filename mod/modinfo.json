@@ -1,8 +1,8 @@
 {
 	"id": "franklygd.extendedcollectiblestracker",
-	"name": "Extended Collectibles Tracker",
-	"version": "1.0.4",
-	"authors": "FranklyGD",
+	"name": "Extended Collectibles Tracker (Fixed)",
+	"version": "1.0.5",
+	"authors": "FranklyGD, wingsummer",
 	"description": "Where the remaining stuff at?",
 	"requirements": ["rwremix"],
 	"requirements_names": ["Rain World Remix"],
